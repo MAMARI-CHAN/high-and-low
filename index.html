@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>ハイ＆ロー</title>
+<style>
+body{background:#0b6623;color:#fff;font-family:sans-serif;text-align:center;padding:20px}
+.card{width:min(240px,80vw);aspect-ratio:240/340;margin:20px auto;perspective:1000px;position:relative}
+.inner{position:relative;width:100%;height:100%;transform-style:preserve-3d}
+.flip{animation:flip .7s ease forwards}
+.face{position:absolute;width:100%;height:100%;backface-visibility:hidden;border-radius:15px;background:#fff;overflow:hidden;box-shadow:0 8px 20px rgba(0,0,0,.5)}
+.back img{width:100%;height:100%;object-fit:cover}.front{transform:rotateY(180deg)}
+.corner{position:absolute;font-size:28px;font-weight:bold}.top{top:10px;left:10px}.bottom{bottom:10px;right:10px;text-align:right}
+.center{height:100%;display:flex;align-items:center;justify-content:center;font-size:100px}
+.red{color:#d50000}.black{color:#000}
+button{padding:12px 24px;margin:5px;border:none;border-radius:10px;font-size:20px;cursor:pointer}
+button:disabled{opacity:.5}
+.overlay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-weight:bold;text-shadow:0 0 8px rgba(0,0,0,.8),0 0 16px rgba(0,0,0,.8);white-space:nowrap;text-align:center}
+.success{color:#FFD700}.failure{color:#ff5555}.draw{color:#87CEFA}.hidden{display:none}
+#history{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-start;max-width:900px;margin:20px auto}
+.history-card{width:60px;height:90px;background:#fff;color:#000;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-direction:column;font-weight:bold}
+.latest{outline:4px solid gold}
+@keyframes flip{from{transform:rotateY(0)}to{transform:rotateY(180deg)}}
+</style>
+</head>
+<body>
+<h1>ハイ＆ロー</h1>
+<h2 id="streakDisplay">0連続成功中</h2>
+<h3 id="bestDisplay">最高0連続成功</h3>
+<div class="card">
+<div class="inner" id="inner">
+<div class="face back"><img src="cards/back.png"></div>
+<div class="face front" id="front"></div>
+</div>
+<div id="msg" class="overlay hidden"></div>
+</div>
+<button id="highBtn" onclick="guess('high')">HIGH</button>
+<button id="lowBtn" onclick="guess('low')">LOW</button>
+<h2>履歴</h2><div id="history"></div>
+<script>
+const suits=['♠','♥','♦','♣'];
+const ranks=['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+let deck=[],current=null,streak=0,messageTimer=null,animating=false;
+let bestScore=Number(localStorage.getItem('highlow_best'))||0;
+const front=document.getElementById('front');
+const inner=document.getElementById('inner');
+const msg=document.getElementById('msg');
+const streakDisplay=document.getElementById('streakDisplay');
+const bestDisplay=document.getElementById('bestDisplay');
+const highBtn=document.getElementById('highBtn');
+const lowBtn=document.getElementById('lowBtn');
+function fitMessage(text){
+ const card=document.querySelector('.card');
+ const maxWidth=card.clientWidth*0.75;
+ const canvas=document.createElement('canvas');
+ const ctx=canvas.getContext('2d');
+ let size=80;
+ while(size>16){
+  ctx.font=`bold ${size}px sans-serif`;
+  if(ctx.measureText(text).width<=maxWidth) break;
+  size--;
+ }
+ msg.style.fontSize=size+'px';
+ msg.textContent=text;
+}
+function value(r){return ranks.indexOf(r)+2}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}}
+function makeDeck(){deck=[];for(const s of suits){for(const r of ranks){deck.push({rank:r,suit:s})}}shuffle(deck)}
+function drawCard(){if(deck.length===0){makeDeck();showMessage('シャッフル','draw',1000)}return deck.pop()}
+function render(c){const cls=(c.suit==='♥'||c.suit==='♦')?'red':'black';front.innerHTML=`<div class="corner top ${cls}">${c.rank}<br>${c.suit}</div><div class="center ${cls}">${c.suit}</div><div class="corner bottom ${cls}">${c.rank}<br>${c.suit}</div>`}
+function updateStreak(){streakDisplay.textContent=`${streak}連続成功中`}
+function updateBest(){bestDisplay.textContent=`最高${bestScore}連続成功`}
+function showMessage(t,type,time=1200){if(messageTimer)clearTimeout(messageTimer);fitMessage(t);msg.className='overlay '+type;messageTimer=setTimeout(()=>{msg.className='overlay hidden';messageTimer=null},time)}
+function animate(){animating=true;highBtn.disabled=true;lowBtn.disabled=true;inner.classList.remove('flip');void inner.offsetWidth;inner.classList.add('flip');setTimeout(()=>{animating=false;highBtn.disabled=false;lowBtn.disabled=false},700)}
+function addHistory(c){const h=document.getElementById('history');h.querySelectorAll('.latest').forEach(x=>x.classList.remove('latest'));const d=document.createElement('div');d.className='history-card latest';d.style.color=(c.suit==='♥'||c.suit==='♦')?'#d50000':'#000';d.innerHTML=`${c.rank}<br>${c.suit}`;h.insertBefore(d,h.firstChild)}
+function start(){makeDeck();streak=0;updateStreak();updateBest();document.getElementById('history').innerHTML='';current=drawCard();render(current);addHistory(current);animate()}
+function guess(type){if(animating)return;const next=drawCard();const a=value(current.rank),b=value(next.rank);render(next);addHistory(next);animate();if(a===b){showMessage('もういちど','draw');current=next;return;}const ok=(type==='high'&&b>a)||(type==='low'&&b<a);if(ok){streak++;if(streak>bestScore){bestScore=streak;localStorage.setItem('highlow_best',bestScore);updateBest()}updateStreak();showMessage('成功！','success');current=next;return;}const finalStreak=streak;showMessage('失敗…','failure',1800);streak=0;updateStreak();setTimeout(()=>{alert(`ゲームオーバー！
+
+${finalStreak}連続成功しました！`);start();},1900)}
+start();
+</script></body></html>
